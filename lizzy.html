@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Lizzy — A Gecko Habitat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Space+Grotesk:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --deep-moss:#0B1F1A;
+    --tank-glass:#12342C;
+    --gecko-teal:#38CDA8;
+    --gecko-belly:#F4E3C0;
+    --coral:#FF6A45;
+    --amber:#F2A63D;
+    --mist:#EAF2EE;
+    --panel-bg: rgba(14, 38, 32, 0.55);
+    --panel-border: rgba(234, 242, 238, 0.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:var(--deep-moss);
+    font-family:'Space Grotesk', sans-serif;
+    color:var(--mist);
+  }
+  canvas{display:block; touch-action:none;}
+
+  #scene-canvas{ position:fixed; inset:0; cursor: crosshair; }
+
+  /* ---------- Vignette / glass tank overlay ---------- */
+  .tank-glass{
+    position:fixed; inset:0; pointer-events:none; z-index:5;
+    background:
+      radial-gradient(ellipse at 50% 108%, rgba(56,205,168,0.10), transparent 55%),
+      radial-gradient(ellipse at center, transparent 42%, rgba(6,16,13,0.55) 100%);
+  }
+  .tank-glass::before{
+    content:"";
+    position:absolute; inset:0;
+    background: linear-gradient(115deg, rgba(255,255,255,0.05) 0%, transparent 18%, transparent 82%, rgba(255,255,255,0.035) 100%);
+    mix-blend-mode: screen;
+  }
+
+  /* ---------- Brand / top-left ---------- */
+  .brand{
+    position:fixed; top:26px; left:28px; z-index:10;
+    display:flex; flex-direction:column; gap:2px;
+    opacity:0; transform:translateY(-8px);
+  }
+  .brand-mark{
+    font-family:'Fredoka', sans-serif; font-weight:700; font-size:28px;
+    letter-spacing:0.5px; color:var(--mist);
+    text-shadow: 0 0 24px rgba(56,205,168,0.35);
+  }
+  .brand-mark span{ color:var(--amber); }
+  .brand-sub{
+    font-family:'JetBrains Mono', monospace; font-size:10.5px;
+    letter-spacing:2px; text-transform:uppercase; color:rgba(234,242,238,0.55);
+  }
+
+  /* ---------- HUD / top-right ---------- */
+  .hud{
+    position:fixed; top:24px; right:24px; z-index:10;
+    width:172px; padding:14px 16px 14px;
+    background:var(--panel-bg);
+    border:1px solid var(--panel-border);
+    border-radius:14px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    opacity:0; transform:translateY(-8px);
+  }
+  .hud-title{
+    font-family:'JetBrains Mono', monospace; font-size:9.5px;
+    letter-spacing:2px; text-transform:uppercase;
+    color:var(--amber); margin-bottom:10px; display:flex; align-items:center; gap:6px;
+  }
+  .hud-dot{
+    width:6px; height:6px; border-radius:50%; background:var(--amber);
+    box-shadow:0 0 8px var(--amber);
+    animation: pulse-dot 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  .hud-row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    padding:5px 0; border-top:1px solid var(--panel-border);
+  }
+  .hud-row:first-of-type{ border-top:none; }
+  .hud-label{ color:rgba(234,242,238,0.5); letter-spacing:0.5px; }
+  .hud-value{ color:var(--mist); font-weight:500; }
+  .hud-value.accent{ color:var(--coral); }
+
+  /* ---------- Hint text / bottom center ---------- */
+  .hint{
+    position:fixed; bottom:34px; left:50%; z-index:10;
+    transform:translate(-50%, 6px);
+    text-align:center; opacity:0;
+    pointer-events:none;
+  }
+  .hint-text{
+    font-family:'Space Grotesk', sans-serif; font-size:13.5px;
+    color:rgba(234,242,238,0.75);
+    background:var(--panel-bg);
+    border:1px solid var(--panel-border);
+    padding:9px 18px; border-radius:999px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .hint-text b{ color:var(--amber); font-weight:600; }
+
+  /* ---------- Loading screen ---------- */
+  .loader{
+    position:fixed; inset:0; z-index:100;
+    background:var(--deep-moss);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px;
+  }
+  .loader-title{
+    font-family:'Fredoka', sans-serif; font-weight:700; font-size:42px;
+    color:var(--mist); letter-spacing:1px;
+  }
+  .loader-title span{ color:var(--gecko-teal); }
+  .loader-sub{
+    font-family:'JetBrains Mono', monospace; font-size:10.5px;
+    letter-spacing:2px; text-transform:uppercase; color:rgba(234,242,238,0.45);
+  }
+  .loader-bar-track{
+    width:220px; height:3px; border-radius:2px;
+    background:rgba(234,242,238,0.12); overflow:hidden;
+  }
+  .loader-bar-fill{
+    width:0%; height:100%; border-radius:2px;
+    background: linear-gradient(90deg, var(--gecko-teal), var(--amber));
+  }
+
+  @media (max-width: 640px){
+    .hud{ width:150px; top:18px; right:16px; padding:12px 14px; }
+    .brand{ top:18px; left:18px; }
+    .brand-mark{ font-size:22px; }
+    .hint-text{ font-size:12px; padding:8px 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .hud-dot{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene-canvas"></canvas>
+<div class="tank-glass"></div>
+
+<div class="brand">
+  <div class="brand-mark">LIZZY<span>.</span></div>
+</div>
+
+<div class="hud">
+  <div class="hud-title"><span class="hud-dot"></span> Sensor Feed</div>
+  <div class="hud-row"><span class="hud-label">Temp</span><span class="hud-value" id="hud-temp">28.1°C</span></div>
+  <div class="hud-row"><span class="hud-label">Humidity</span><span class="hud-value" id="hud-humid">64%</span></div>
+  <div class="hud-row"><span class="hud-label">Bugs eaten</span><span class="hud-value accent" id="hud-bugs">0</span></div>
+</div>
+
+<div class="hint">
+  <div class="hint-text">Move your cursor — Lizzy will follow. <b>Click</b> to drop her a bug.</div>
+</div>
+
+<div class="loader" id="loader">
+  <div class="loader-title">LIZZY<span>.</span></div>
+  <div class="loader-sub">Warming the terrarium</div>
+  <div class="loader-bar-track"><div class="loader-bar-fill" id="loader-fill"></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* =========================================================================
+   LIZZY — a stylized procedural gecko in a terrarium.
+   Pure Three.js (r128, global namespace) + GSAP for UI / feedback polish.
+   No external models: the gecko is entirely built from primitives.
+   ========================================================================= */
+
+/* ---------------------------- Basic setup ---------------------------- */
+
+const canvas = document.getElementById('scene-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace || renderer.outputColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0B1F1A);
+scene.fog = new THREE.FogExp2(0x0B1F1A, 0.042);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.1, 100);
+const camBase = new THREE.Vector3(0, 7.6, 10.6);
+camera.position.copy(camBase);
+camera.lookAt(0, 0.6, 0);
+
+const clock = new THREE.Clock();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ------------------------------- Lights ------------------------------- */
+
+scene.add(new THREE.HemisphereLight(0x9fe8cf, 0x0b1f1a, 0.65));
+
+const keyLight = new THREE.DirectionalLight(0xfff1d6, 1.2);
+keyLight.position.set(6, 10, 5);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024, 1024);
+keyLight.shadow.camera.left = -100;
+keyLight.shadow.camera.right = 100;
+keyLight.shadow.camera.top = 100;
+keyLight.shadow.camera.bottom = -100;
+keyLight.shadow.camera.far = 200;
+keyLight.shadow.bias = -0.0025;
+scene.add(keyLight);
+
+const fillLight = new THREE.PointLight(0xff6a45, 0.35, 22);
+fillLight.position.set(-5, 3, -3.5);
+scene.add(fillLight);
+
+const rimLight = new THREE.PointLight(0xf2a63d, 0.4, 16);
+rimLight.position.set(0, 4, -6.5);
+scene.add(rimLight);
+
+/* ------------------------- Toon shading gradient ------------------------ */
+
+function makeToonGradient(){
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 1;
+  const ctx = c.getContext('2d');
+  const shades = [70, 140, 200, 255];
+  shades.forEach((v,i)=>{ ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.fillRect(i,0,1,1); });
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+const toonGrad = makeToonGradient();
+
+/* --------------------------------- Floor -------------------------------- */
+
+function makeFloorTexture(){
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#15382F';
+  ctx.fillRect(0,0,size,size);
+  for(let i=0;i<900;i++){
+    const x = Math.random()*size, y = Math.random()*size;
+    const r = Math.random()*1.6 + 0.4;
+    const shade = Math.random()>0.5 ? 'rgba(30,70,58,0.5)' : 'rgba(90,150,120,0.18)';
+    ctx.fillStyle = shade;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(40,40);
+  return tex;
+}
+
+const floorGeo = new THREE.CylinderGeometry(100, 100, 0.4, 64);
+const floorMat = new THREE.MeshStandardMaterial({ map: makeFloorTexture(), color: 0xffffff, roughness: 0.95, metalness: 0 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.position.y = -0.2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// invisible math plane (y=0) used for raycasting the cursor onto the ground
+const groundPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+
+/* --------------------------------- Decor -------------------------------- */
+
+// a rock
+const rockMat = new THREE.MeshStandardMaterial({
+    color: 0x54554d,
+    roughness: 1,
+    flatShading: true
+});
+
+for(let i = 0; i < 150; i++){
+
+    const size = THREE.MathUtils.randFloat(0.2, 1.1);
+
+    const rock = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(size, 0),
+        rockMat
+    );
+
+    rock.position.set(
+        THREE.MathUtils.randFloatSpread(180),
+        size * 0.4,
+        THREE.MathUtils.randFloatSpread(180)
+    );
+
+    rock.rotation.set(
+        Math.random() * Math.PI,
+        Math.random() * Math.PI,
+        Math.random() * Math.PI
+    );
+
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+
+    scene.add(rock);
+}
+// simple fan-leaf plants
+function makePlant(x, z, scale, leafColor){
+  const g = new THREE.Group();
+  const stemMat = new THREE.MeshToonMaterial({ color:0x2c5a44, gradientMap: toonGrad });
+  const leafMat = new THREE.MeshToonMaterial({ color:leafColor, gradientMap: toonGrad });
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,0.5,6), stemMat);
+  stem.position.y = 0.25;
+  stem.castShadow = true;
+  g.add(stem);
+  const leafCount = 5;
+  for(let i=0;i<leafCount;i++){
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.15, 5), leafMat);
+    const a = (i/leafCount) * Math.PI*2 + Math.random()*0.4;
+    leaf.position.set(0, 0.5, 0);
+    leaf.rotation.z = Math.PI/2 - 0.55;
+    leaf.rotation.y = a;
+    leaf.castShadow = true;
+    g.add(leaf);
+  }
+  g.position.set(x, 0, z);
+  g.scale.setScalar(scale);
+  return g;
+}
+const colors = [
+    0x3fae6e,
+    0xff6a45,
+    0x38cda8,
+    0x67c23a,
+    0x84d96c
+];
+
+for(let i = 0; i < 250; i++){
+
+    scene.add(
+        makePlant(
+
+            THREE.MathUtils.randFloatSpread(180),
+
+            THREE.MathUtils.randFloatSpread(180),
+
+            THREE.MathUtils.randFloat(0.6,1.5),
+
+            colors[Math.floor(Math.random()*colors.length)]
+
+        )
+    );
+
+}
+
+// drifting dust motes
+const moteCount = 140;
+const moteGeo = new THREE.BufferGeometry();
+const motePos = new Float32Array(moteCount*3);
+for(let i=0;i<moteCount;i++){
+  const r = Math.random()*90;
+  const a = Math.random()*Math.PI*2;
+  motePos[i*3+0] = Math.cos(a)*r;
+  motePos[i*3+1] = Math.random()*4.5;
+  motePos[i*3+2] = Math.sin(a)*r;
+}
+moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+const moteMat = new THREE.PointsMaterial({ color:0xbfe9d8, size:0.03, transparent:true, opacity:0.35, blending:THREE.AdditiveBlending, depthWrite:false });
+const motes = new THREE.Points(moteGeo, moteMat);
+scene.add(motes);
+
+/* ================================ LIZZY ================================ */
+
+const matBody   = new THREE.MeshToonMaterial({
+    color: 0xFF8FB1,      // Main body
+    gradientMap: toonGrad,
+    flatShading: true
+});
+
+const matBelly  = new THREE.MeshToonMaterial({
+    color: 0xFFE6EF,      // Belly
+    gradientMap: toonGrad
+});
+
+const matSpot   = new THREE.MeshToonMaterial({
+    color: 0xFF5C8A,      // Spots
+    gradientMap: toonGrad,
+    flatShading: true
+});
+
+const matToe    = new THREE.MeshToonMaterial({
+    color: 0xFFC4D6,      // Toes
+    gradientMap: toonGrad
+});
+
+const matEye = new THREE.MeshStandardMaterial({
+    color: 0xFFFFFF,
+    roughness: 0.3
+});
+
+const matPupil = new THREE.MeshStandardMaterial({
+    color: 0x1A1A1A,
+    roughness: 0.4
+});
+
+const UP = new THREE.Vector3(0,1,0);
+
+function setShadow(mesh){ mesh.castShadow = true; mesh.receiveShadow = false; return mesh; }
+
+// places a unit-height cylinder mesh (centered at origin, along Y) between two points, IN LOCAL SPACE of its parent
+function placeBetween(mesh, a, b){
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = Math.max(dir.length(), 0.0001);
+  mesh.position.copy(a).addScaledVector(dir, 0.5);
+  mesh.scale.y = len;
+  const dirN = dir.clone().normalize();
+  mesh.quaternion.setFromUnitVectors(UP, dirN);
+}
+const matOutline = new THREE.MeshBasicMaterial({ color: 0x1a0f14, side: THREE.BackSide });
+
+function addOutline(mesh, thickness = 1.06){
+  const outline = new THREE.Mesh(mesh.geometry, matOutline);
+  outline.scale.copy(mesh.scale).multiplyScalar(thickness);
+  outline.position.copy(mesh.position);
+  outline.quaternion.copy(mesh.quaternion);
+  mesh.add(outline); // inherits parent transforms, stays in sync automatically
+  return outline;
+}
+
+// classic analytic 2-bone IK solver (hip -> knee -> foot), all vectors in the same local space
+function solveTwoBoneIK(hip, foot, l1, l2, poleDir){
+  const d = new THREE.Vector3().subVectors(foot, hip);
+  let dist = d.length();
+  const maxDist = l1 + l2 - 0.001;
+  if(dist > maxDist){
+    dist = maxDist;
+    d.setLength(dist);
+    foot = hip.clone().add(d);
+  }
+  if(dist < 0.0001) dist = 0.0001;
+  const dn = d.clone().normalize();
+  const t = (l1*l1 - l2*l2 + dist*dist) / (2*dist);
+  const h = Math.sqrt(Math.max(0, l1*l1 - t*t));
+  let perp = poleDir.clone().sub(dn.clone().multiplyScalar(poleDir.dot(dn)));
+  if(perp.lengthSq() < 1e-6){ perp.set(0,1,0).sub(dn.clone().multiplyScalar(dn.y)); }
+  if(perp.lengthSq() < 1e-6){ perp.set(1,0,0); }
+  perp.normalize();
+  const knee = hip.clone().addScaledVector(dn, t).addScaledVector(perp, h);
+  return { knee, foot };
+}
+
+const lizzy = new THREE.Group();
+lizzy.position.set(0, 0.85, 0);
+scene.add(lizzy);
+
+// ---- body: overlapping tapered ellipsoids forming the torso ----
+const bodySpecs = [
+  { z: 1.02, y: 0.06, rx:0.32, ry:0.28, rz:0.40 },
+  { z: 0.34, y: 0.11, rx:0.42, ry:0.36, rz:0.55 },
+  { z:-0.36, y: 0.09, rx:0.40, ry:0.34, rz:0.56 },
+  { z:-1.02, y: 0.00, rx:0.29, ry:0.25, rz:0.40 },
+];
+const bodySphereGeo = new THREE.SphereGeometry(1, 8, 6);
+bodySpecs.forEach(s=>{
+  const m = new THREE.Mesh(bodySphereGeo, matBody);
+  m.position.set(0, s.y, s.z);
+  m.scale.set(s.rx, s.ry, s.rz);
+  setShadow(m);
+  lizzy.add(m);
+});
+// cream belly underside
+[1.0, 0.3, -0.4, -0.95].forEach((z,i)=>{
+  const m = new THREE.Mesh(bodySphereGeo, matBelly);
+  const ry = [0.16,0.20,0.19,0.14][i];
+  const rx = [0.24,0.32,0.31,0.22][i];
+  m.position.set(0, -0.12, z);
+  m.scale.set(rx, ry, rx*1.1);
+  lizzy.add(m);
+});
+// dorsal spots (day-gecko pattern)
+const spotGeo = new THREE.SphereGeometry(1, 8, 6);
+const spotLayout = [
+  [0.14,0.30,0.75],[-0.16,0.29,0.55],[0.20,0.33,0.15],[-0.22,0.32,-0.10],
+  [0.15,0.28,-0.45],[-0.14,0.27,-0.65],[0,0.34,0.35],[0.24,0.24,-0.95],
+  [-0.24,0.24,-1.05],[0,0.30,-1.2]
+];
+spotLayout.forEach(p=>{
+  const m = new THREE.Mesh(spotGeo, matSpot);
+  m.position.set(p[0], p[1], p[2]);
+  m.scale.set(0.075, 0.035, 0.075);
+  lizzy.add(m);
+});
+
+// ---- head ----
+const headGroup = new THREE.Group();
+headGroup.position.set(0, 0.20, 1.32);
+lizzy.add(headGroup);
+
+const skull = new THREE.Mesh(bodySphereGeo, matBody);
+skull.scale.set(0.33, 0.27, 0.36);
+setShadow(skull);
+headGroup.add(skull);
+
+const snout = new THREE.Mesh(bodySphereGeo, matBody);
+snout.scale.set(0.22, 0.17, 0.30);
+snout.position.set(0, -0.02, 0.28);
+setShadow(snout);
+headGroup.add(snout);
+
+const mouthLine = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.015, 0.05), matPupil);
+mouthLine.position.set(0, -0.12, 0.44);
+headGroup.add(mouthLine);
+
+[-0.07, 0.07].forEach(x=>{
+  const n = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6,6), matPupil);
+  n.position.set(x, 0.03, 0.55);
+  headGroup.add(n);
+});
+
+// eyes (each in its own group so blinking = scale squash)
+const eyeGroups = [];
+[-0.185, 0.185].forEach(x=>{
+  const eyeGroup = new THREE.Group();
+  eyeGroup.position.set(x, 0.13, 0.20);
+  const white = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), matEye);
+  eyeGroup.add(white);
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.058, 10, 8), matPupil);
+  pupil.position.set(x>0?0.03:-0.03, 0, 0.085);
+  pupil.name = 'pupil';
+  eyeGroup.add(pupil);
+  headGroup.add(eyeGroup);
+  eyeGroups.push(eyeGroup);
+});
+
+// tongue (hidden by default, flicked out when feeding)
+const tongue = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.026, 1, 6), matSpot);
+tongue.rotation.x = Math.PI/2;
+tongue.position.set(0, -0.05, 0.42);
+tongue.scale.set(1, 0.001, 1);
+headGroup.add(tongue);
+
+/* --------------------------------- Legs --------------------------------- */
+
+const legConfigs = [
+  { name:'FL', side:-1, hip:new THREE.Vector3(-0.40,-0.02, 0.66), phase:0 },
+  { name:'FR', side: 1, hip:new THREE.Vector3( 0.40,-0.02, 0.66), phase:Math.PI },
+  { name:'BL', side:-1, hip:new THREE.Vector3(-0.36,-0.02,-0.60), phase:Math.PI },
+  { name:'BR', side: 1, hip:new THREE.Vector3( 0.36,-0.02,-0.60), phase:0 },
+];
+const L1 = 0.5, L2 = 0.52;
+
+const legs = legConfigs.map(cfg=>{
+  const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.065, 1, 6), matBody);
+  const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.045, 1, 6), matBody);
+  const foot = new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 6), matBody);
+  foot.scale.set(1, 0.55, 1.35);
+  setShadow(upper); setShadow(lower); setShadow(foot);
+  lizzy.add(upper, lower, foot);
+
+  const toes = [];
+  for(let i=0;i<3;i++){
+    const toe = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 6), matToe);
+    toe.scale.set(1, 0.5, 1.8);
+    foot.add(toe);
+    toes.push(toe);
+  }
+
+  const restFoot = cfg.hip.clone().add(new THREE.Vector3(cfg.side*0.20, -0.80, 0.06));
+  const poleDir = new THREE.Vector3(cfg.side*0.6, -0.75, 0.3).normalize();
+
+  return { cfg, upper, lower, foot, toes, restFoot, poleDir };
+});
+
+function updateLegs(gaitPhase, strideScale){
+  legs.forEach(leg=>{
+    const phase = gaitPhase + leg.cfg.phase;
+    const swing = Math.sin(phase);
+    const footTarget = leg.restFoot.clone();
+    footTarget.z += swing * 0.30 * strideScale;
+    footTarget.y += Math.max(0, swing) * 0.24 * strideScale;
+    footTarget.x += leg.cfg.side * 0.05 * Math.max(0, swing) * strideScale;
+
+    const { knee, foot } = solveTwoBoneIK(leg.cfg.hip, footTarget, L1, L2, leg.poleDir);
+    placeBetween(leg.upper, leg.cfg.hip, knee);
+    placeBetween(leg.lower, knee, foot);
+    leg.foot.position.copy(foot);
+
+    const toeSpread = [-0.35, 0, 0.35];
+    leg.toes.forEach((toe, i)=>{
+      const a = toeSpread[i];
+      toe.position.set(Math.sin(a)*0.06, -0.02, 0.09*Math.cos(a));
+    });
+  });
+}
+
+/* --------------------------------- Tail ---------------------------------- */
+// The tail lives in WORLD space so it naturally lags behind the body while turning.
+
+const TAIL_COUNT = 9;
+const tailSegLens = [];
+const tailRadii = [];
+for(let i=0;i<TAIL_COUNT;i++){
+  const t = i/(TAIL_COUNT-1);
+  tailSegLens.push(THREE.MathUtils.lerp(0.40, 0.18, t));
+  tailRadii.push(THREE.MathUtils.lerp(0.20, 0.02, t));
+}
+const tailMeshes = [];
+const tailPos = [];
+const hipLocal = new THREE.Vector3(0, 0.02, -1.05);
+let prevWorld = lizzy.localToWorld(hipLocal.clone());
+for(let i=0;i<TAIL_COUNT;i++){
+  const geo = new THREE.CylinderGeometry(tailRadii[i]*0.82, tailRadii[i], 1, 7);
+  const mesh = new THREE.Mesh(geo, i >= TAIL_COUNT-4 ? matSpot: matBody);
+  setShadow(mesh);
+  scene.add(mesh);
+  tailMeshes.push(mesh);
+  const p = prevWorld.clone().add(new THREE.Vector3(0,0,-tailSegLens[i]));
+  tailPos.push(p);
+  prevWorld = p;
+}
+
+function updateTail(){
+  const anchor = lizzy.localToWorld(hipLocal.clone());
+  let prev = anchor;
+  for(let i=0;i<TAIL_COUNT;i++){
+    const dir = new THREE.Vector3().subVectors(tailPos[i], prev);
+    if(dir.lengthSq() < 1e-8) dir.set(0,0,-1);
+    dir.normalize();
+    tailPos[i].copy(prev).addScaledVector(dir, tailSegLens[i]);
+    placeBetween(tailMeshes[i], prev, tailPos[i]);
+    prev = tailPos[i];
+  }
+}
+
+/* ------------------------------ Movement AI ------------------------------ */
+
+const raycaster = new THREE.Raycaster();
+const pointerNDC = new THREE.Vector2(0,0);
+const targetPoint = new THREE.Vector3(0,0,0);
+let hasPointer = false;
+
+const MAX_SPEED = 2.5;
+const TURN_SPEED = 3.4;
+const ROAM_RADIUS = 100;
+
+let gaitPhase = 0;
+let currentSpeed = 0;
+let blinkTimer = THREE.MathUtils.randFloat(2, 4);
+
+function angleDiff(a, b){
+  let d = (a - b) % (Math.PI*2);
+  if(d > Math.PI) d -= Math.PI*2;
+  if(d < -Math.PI) d += Math.PI*2;
+  return d;
+}
+
+function updateMovement(delta, elapsed){
+  const dx = targetPoint.x - lizzy.position.x;
+  const dz = targetPoint.z - lizzy.position.z;
+  const distPlanar = Math.hypot(dx, dz);
+  const deadZone = 0.55;
+
+  let speed = 0;
+  if(distPlanar > deadZone && hasPointer){
+    const desiredYaw = Math.atan2(dx, dz);
+    const diff = angleDiff(desiredYaw, lizzy.rotation.y);
+    const maxStep = TURN_SPEED * delta;
+    lizzy.rotation.y += THREE.MathUtils.clamp(diff, -maxStep, maxStep);
+
+    const alignment = Math.max(0, Math.cos(diff));
+    const distFactor = THREE.MathUtils.clamp(distPlanar/1.4, 0, 1);
+    speed = MAX_SPEED * alignment * distFactor;
+
+    const forward = new THREE.Vector3(Math.sin(lizzy.rotation.y), 0, Math.cos(lizzy.rotation.y));
+    lizzy.position.x += forward.x * speed * delta;
+    lizzy.position.z += forward.z * speed * delta;
+
+    // keep inside the terrarium
+    const r = Math.hypot(lizzy.position.x, lizzy.position.z);
+    if(r > ROAM_RADIUS){
+      const s = ROAM_RADIUS / r;
+      lizzy.position.x *= s;
+      lizzy.position.z *= s;
+    }
+  }
+
+  currentSpeed = THREE.MathUtils.lerp(currentSpeed, speed, 1 - Math.pow(0.001, delta));
+  const speedFactor = THREE.MathUtils.clamp(currentSpeed / MAX_SPEED, 0, 1);
+  const strideScale = THREE.MathUtils.clamp(speedFactor, 0.12, 1);
+
+  gaitPhase += delta * (2.0 + speedFactor * 11);
+  updateLegs(gaitPhase, strideScale);
+
+  // idle breathing + subtle head bob when mostly still
+  const breathe = 1 + Math.sin(elapsed * 1.8) * (0.012 * (1 - speedFactor*0.7));
+  lizzy.scale.set(1, breathe, 1);
+  headGroup.position.y = 0.20 + Math.sin(elapsed*1.3) * 0.008;
+
+  updateHeadLook(delta);
+  updateBlink(delta);
+  updateTail();
+}
+
+function updateHeadLook(delta){
+  const headWorld = new THREE.Vector3();
+  headGroup.getWorldPosition(headWorld);
+  const lookTarget = hasPointer ? targetPoint : new THREE.Vector3(lizzy.position.x, 0, lizzy.position.z + 3);
+
+  const toTarget = new THREE.Vector3().subVectors(lookTarget, headWorld);
+  const flat = new THREE.Vector3(toTarget.x, 0, toTarget.z);
+  if(flat.lengthSq() < 1e-6) flat.set(0,0,1);
+  flat.normalize();
+
+  const bodyForward = new THREE.Vector3(Math.sin(lizzy.rotation.y), 0, Math.cos(lizzy.rotation.y));
+  const yawDesired = THREE.MathUtils.clamp(angleDiff(Math.atan2(flat.x, flat.z), Math.atan2(bodyForward.x, bodyForward.z)), -0.85, 0.85);
+
+  const distPlanar = Math.hypot(toTarget.x, toTarget.z) || 1;
+  const pitchDesired = THREE.MathUtils.clamp((headWorld.y - lookTarget.y) * 0.22 / Math.max(distPlanar,1.5), -0.08, 0.5);
+
+  const t = 1 - Math.pow(0.0008, delta);
+  headGroup.rotation.y = THREE.MathUtils.lerp(headGroup.rotation.y, yawDesired, t);
+  headGroup.rotation.x = THREE.MathUtils.lerp(headGroup.rotation.x, pitchDesired, t);
+
+  // subtle pupil parallax
+  eyeGroups.forEach(eg=>{
+    const pupil = eg.getObjectByName('pupil');
+    if(pupil){
+      pupil.position.x = THREE.MathUtils.lerp(pupil.position.x, (eg.position.x>0?0.03:-0.03) + yawDesired*0.05, 0.2);
+    }
+  });
+}
+
+function updateBlink(delta){
+  blinkTimer -= delta;
+  if(blinkTimer <= 0){
+    blinkTimer = THREE.MathUtils.randFloat(2.5, 6);
+    eyeGroups.forEach(eg=>{
+      gsap.timeline()
+        .to(eg.scale, { y:0.06, duration:0.09, ease:'power1.in' })
+        .to(eg.scale, { y:1, duration:0.13, ease:'power1.out' });
+    });
+  }
+}
+
+/* --------------------------------- Bugs ---------------------------------- */
+
+let bugsEaten = 0;
+let activeBug = null;
+let bugSpawnTimeout = null;
+
+function makeGlowTexture(){
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  grad.addColorStop(0, 'rgba(242,166,61,0.9)');
+  grad.addColorStop(0.4, 'rgba(242,166,61,0.45)');
+  grad.addColorStop(1, 'rgba(242,166,61,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+const glowTex = makeGlowTexture();
+
+function spawnBug(pos){
+  removeBug();
+  clearTimeout(bugSpawnTimeout);
+
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 10, 8),
+    new THREE.MeshStandardMaterial({ color:0xF2A63D, emissive:0xF2A63D, emissiveIntensity:1.3, roughness:0.4 })
+  );
+  group.add(body);
+
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+  glow.scale.set(0.6, 0.6, 0.6);
+  group.add(glow);
+
+  const light = new THREE.PointLight(0xf2a63d, 0.7, 2.6);
+  group.add(light);
+
+  group.position.copy(pos);
+  group.position.y = 0.12;
+  scene.add(group);
+  activeBug = group;
+}
+
+function removeBug(){
+  if(activeBug){
+    scene.remove(activeBug);
+    activeBug = null;
+  }
+}
+
+function randomFloorPoint(){
+  const r = Math.random()*5.6 + 0.8;
+  const a = Math.random()*Math.PI*2;
+  return new THREE.Vector3(Math.cos(a)*r, 0, Math.sin(a)*r);
+}
+
+function scheduleAutoBug(){
+  clearTimeout(bugSpawnTimeout);
+  bugSpawnTimeout = setTimeout(()=>{
+    if(!activeBug) spawnBug(randomFloorPoint());
+  }, THREE.MathUtils.randFloat(1800, 3400));
+}
+
+function burstParticles(pos){
+  const n = 10;
+  for(let i=0;i<n;i++){
+    const mat = new THREE.MeshBasicMaterial({ color: i%2===0 ? 0xFF6A45 : 0xF2A63D, transparent:true, opacity:1 });
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), mat);
+    p.position.copy(pos);
+    scene.add(p);
+    const dir = new THREE.Vector3((Math.random()-0.5), Math.random()*0.8+0.2, (Math.random()-0.5)).normalize();
+    const dist = 0.35 + Math.random()*0.35;
+    gsap.to(p.position, {
+      x: pos.x + dir.x*dist, y: pos.y + dir.y*dist, z: pos.z + dir.z*dist,
+      duration: 0.5, ease:'power2.out'
+    });
+    gsap.to(mat, { opacity:0, duration:0.5, ease:'power1.in', onComplete:()=>{ scene.remove(p); } });
+  }
+}
+
+function flickTongue(){
+  gsap.timeline()
+    .to(tongue.scale, { y:1.7, duration:0.09, ease:'power2.out' })
+    .to(tongue.scale, { y:0.001, duration:0.17, ease:'power2.in' });
+}
+
+function bounceBody(){
+  gsap.timeline()
+    .to(lizzy.scale, { x:1.1, y:0.88, z:1.1, duration:0.09, ease:'power2.out' })
+    .to(lizzy.scale, { x:1, y:1, z:1, duration:0.25, ease:'elastic.out(1, 0.5)' });
+}
+
+function bounceHud(){
+  const el = document.getElementById('hud-bugs');
+  gsap.fromTo(el, { scale:1.6, color:'#FF6A45' }, { scale:1, duration:0.4, ease:'back.out(3)' });
+}
+
+function checkFeeding(){
+  if(!activeBug) return;
+  const headWorld = new THREE.Vector3();
+  headGroup.getWorldPosition(headWorld);
+  const d = headWorld.distanceTo(activeBug.position);
+  if(d < 0.95){
+    flickTongue();
+    burstParticles(activeBug.position.clone());
+    bounceBody();
+    removeBug();
+    bugsEaten++;
+    document.getElementById('hud-bugs').textContent = bugsEaten;
+    bounceHud();
+    hideHintIfNeeded();
+    scheduleAutoBug();
+  }
+}
+
+/* -------------------------------- Input ----------------------------------- */
+
+function pointerToTarget(clientX, clientY){
+  pointerNDC.x = (clientX / window.innerWidth) * 2 - 1;
+  pointerNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(pointerNDC, camera);
+  const hit = new THREE.Vector3();
+  const ok = raycaster.ray.intersectPlane(groundPlane, hit);
+  if(ok){
+    const r = Math.hypot(hit.x, hit.z);
+    if(r > ROAM_RADIUS){ const s = ROAM_RADIUS/r; hit.x*=s; hit.z*=s; }
+    targetPoint.copy(hit);
+    hasPointer = true;
+  }
+  return hit;
+}
+
+let mouseNorm = { x:0, y:0 };
+window.addEventListener('pointermove', (e)=>{
+  pointerToTarget(e.clientX, e.clientY);
+  mouseNorm.x = (e.clientX/window.innerWidth)*2 - 1;
+  mouseNorm.y = (e.clientY/window.innerHeight)*2 - 1;
+});
+
+window.addEventListener('pointerdown', (e)=>{
+  const hit = pointerToTarget(e.clientX, e.clientY);
+  spawnBug(hit.clone());
+  hideHintIfNeeded();
+});
+
+window.addEventListener('touchmove', (e)=>{
+  if(e.touches && e.touches[0]){
+    pointerToTarget(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, { passive:true });
+
+/* --------------------------------- HUD ------------------------------------- */
+
+function updateHud(elapsed){
+  const temp = (28 + Math.sin(elapsed*0.15)*1.3).toFixed(1);
+  const humid = (64 + Math.cos(elapsed*0.11)*3).toFixed(0);
+  document.getElementById('hud-temp').textContent = temp + '°C';
+  document.getElementById('hud-humid').textContent = humid + '%';
+}
+
+let hintHidden = false;
+function hideHintIfNeeded(){
+  if(hintHidden) return;
+  hintHidden = true;
+  gsap.to('.hint', { opacity:0, y:6, duration:0.6, ease:'power1.out' });
+}
+
+/* -------------------------------- Camera ------------------------------------ */
+
+function updateCamera(delta){
+  const parX = mouseNorm.x * 0.9;
+  const parY = mouseNorm.y * 0.5;
+  const desired = new THREE.Vector3(camBase.x + parX, camBase.y - parY*0.6, camBase.z + parY*0.4);
+  camera.position.lerp(desired, 1 - Math.pow(0.0015, delta));
+  const lookAt = new THREE.Vector3().lerpVectors(new THREE.Vector3(0,0.5,0), lizzy.position, 0.35);
+  camera.lookAt(lookAt.x, lookAt.y + 0.5, lookAt.z);
+}
+
+/* ---------------------------------- Loop ------------------------------------- */
+const cameraRig = new THREE.Object3D();
+cameraRig.position.copy(camera.position);
+
+const cameraLook = new THREE.Vector3();
+const cameraOffset = new THREE.Vector3(0, 5, 9);
+
+function animate(){
+  requestAnimationFrame(animate);
+  const delta = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.getElapsedTime();
+
+  updateMovement(delta, elapsed);
+
+  // Parallax offset from mouse (folded into ONE system now)
+  const parX = mouseNorm.x * 0.9;
+  const parY = mouseNorm.y * 0.5;
+  const parallax = new THREE.Vector3(parX, -parY * 0.6, parY * 0.4);
+
+  // Smooth follow point (rig target = lizzy + offset + parallax)
+  cameraRig.position.lerp(
+    lizzy.position.clone().add(cameraOffset).add(parallax),
+    0.03
+  );
+
+  // Camera follows the rig — the ONLY thing that sets camera.position now
+  camera.position.lerp(cameraRig.position, 0.12);
+
+  // Smooth look target — the ONLY thing that sets camera.lookAt now
+  cameraLook.lerp(
+    lizzy.position.clone().add(new THREE.Vector3(0, 1, 0)),
+    0.08
+  );
+  camera.lookAt(cameraLook);
+
+  checkFeeding();
+  updateHud(elapsed);
+
+  motes.rotation.y += delta * 0.02;
+  const posAttr = motes.geometry.attributes.position;
+  for(let i=0;i<moteCount;i++){
+    let y = posAttr.getY(i) + delta*0.12;
+    if(y > 4.5) y = 0;
+    posAttr.setY(i, y);
+  }
+  posAttr.needsUpdate = true;
+
+  renderer.render(scene, camera);
+}
+
+/* ------------------------------- Boot sequence -------------------------------- */
+
+// initial resting pose so legs aren't collapsed on first frame
+updateLegs(0, 0.15);
+updateTail();
+targetPoint.set(0, 0, 2.2);
+
+const fill = document.getElementById('loader-fill');
+gsap.to(fill, { width: '100%', duration: 1.1, ease:'power1.inOut' });
+
+window.addEventListener('load', startupSequence);
+// fallback in case 'load' already fired
+if(document.readyState === 'complete') startupSequence();
+
+let started = false;
+function startupSequence(){
+  if(started) return;
+  started = true;
+  setTimeout(()=>{
+    gsap.to('#loader', {
+      opacity:0, duration:0.6, ease:'power1.out',
+      onComplete: ()=>{ document.getElementById('loader').style.display = 'none'; }
+    });
+    gsap.to('.brand', { opacity:1, y:0, duration:0.7, ease:'power2.out', delay:0.15 });
+    gsap.to('.hud', { opacity:1, y:0, duration:0.7, ease:'power2.out', delay:0.3 });
+    gsap.to('.hint', { opacity:1, y:0, duration:0.7, ease:'power2.out', delay:0.55 });
+    spawnBug(new THREE.Vector3(1.6, 0, 1.2));
+  }, 1250);
+}
+
+animate();
+
+// gently retire the intro hint after a while even without interaction
+setTimeout(hideHintIfNeeded, 9000);
+
+})();
+</script>
+</body>
+</html>
